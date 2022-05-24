@@ -1,0 +1,226 @@
+---
+title: 'STAT-4630 Project'
+author: "Michael Ghattas"
+date: "4/29/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(brms)
+library(ggridges)
+library(shinystan)
+library(bayesplot)
+library(tidybayes)
+library(ggmcmc)
+library(remotes)
+library(rstanarm)
+library(bayestestR)
+library(insight)
+library(dplyr)
+library(logspline)
+```
+
+
+```{r}
+rawData <- read.csv("/Users/Home/Documents/Michael_Ghattas/School/CU_Boulder/BA-BS/2022/Spring 2022/STAT - 4630/Project/Data/Absenteeism_at_work_Project.csv")
+
+for (i in 1:4)
+{
+  rawData[, i] <- as.double(rawData[, i])
+}
+cleanData <- na.omit(rawData)
+rawDF <- cleanData
+
+cleanDF <- rawDF[, 2:21]
+
+cleanDF
+rawDF
+```
+
+```{r}
+modl <- lm(Absenteeism.time.in.hours ~ ., data = rawDF)
+summary(modl)
+
+get_parameters(modl)
+
+ggplot(rawDF, aes(x = ID, y = Absenteeism.time.in.hours))  + geom_point() + theme_bw() + geom_smooth(method = "lm") +
+  xlab("Observation ID") + ylab("Absence in Hours") + ggtitle("Absence Observations")
+```
+```{r}
+dataFrame <- data.frame(cbind(absenceHrs = cleanDF$Absenteeism.time.in.hours, weekDay = cleanDF$Day.of.the.week,
+ commuteDist = cleanDF$Distance.from.Residence.to.Work, workLoad = cleanDF$Work.load.Average.day, achieve = cleanDF$Hit.target,
+ repeats = cleanDF$Disciplinary.failure, education = cleanDF$Education, BMI = cleanDF$Body.mass.index)); dataFrame
+
+mod <- lm(absenceHrs ~ ., data = dataFrame)
+summary(mod)
+
+get_parameters(mod)
+mean(dataFrame$absenceHrs)
+```
+
+
+```{r}
+df <- data.frame(cbind(abs = dataFrame$absenceHrs, dis = dataFrame$commuteDist, day = dataFrame$weekDay, edu = dataFrame$education, bmi = dataFrame$BMI)); df
+
+freqMod <- glm(abs ~ ., data = df)
+summary(freqMod)
+get_parameters(freqMod)
+
+mean(df$abs)
+mean(df$dis)
+mean(df$bmi)
+mean(df$edu)
+mean(df$day)
+
+hist(df$abs)
+hist(df$dis)
+hist(df$bmi)
+hist(df$edu)
+hist(df$day)
+
+coef(freqMod)
+
+ggplot(df, aes(x = day, y = abs)) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("Day if the week (1 = Sun | 7 = Sat)") + ylab("Absence in Hours") + ggtitle("Absence & Week Day")
+
+ggplot(df, aes(x = dis, y = abs)) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("Commute in Miles") + ylab("Absence in Hours") + ggtitle("Absence & Commute Distance")
+
+ggplot(df, aes(x = edu, y = abs)) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("None =< 1 =< HS/GED | HS/GED =< 2 =< Undergrad | Undergrad =< 3 =< Grad | Grad =< 4") + ylab("Absence in Hours") + ggtitle("Absence & Education Level")
+
+ggplot(df, aes(x = bmi, y = abs)) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("Body Mass Index") + ylab("Absence in Hours") + ggtitle("Absence  &BMI")
+
+ggplot(df, aes(x = day, y = abs)) + ylim(1, 7) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("Day if the week (1 = Sun | 7 = Sat)") + ylab("Absence in Hours") + ggtitle("Absence & Week Day")
+
+ggplot(df, aes(x = dis, y = abs)) + xlim(10, 50) + ylim(1, 7) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("Commute in Miles") + ylab("Absence in Hours") + ggtitle("Absence & Commute Distance")
+
+ggplot(df, aes(x = edu, y = abs)) + ylim(1, 7) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("None < 1 =< HS/GED | HS/GED < 2 =< Undergrad | Undergrad < 3 =< Grad | Grad =< 4") + ylab("Absence in Hours") + ggtitle("Absence & Education Level")
+
+ggplot(df, aes(x = bmi, y = abs)) + xlim(18.5, 30) + ylim(1, 7) + geom_point() + theme_bw() + geom_smooth(method = "glm") +
+  xlab("Body Mass Index") + ylab("Absence in Hours") + ggtitle("Absence  &BMI")
+```
+
+
+```{r}
+bayMod <- stan_glm(abs ~ ., data = df, chains = 4, iter = 4000, warmup = 2000)
+posteriors <- get_parameters(bayMod)
+posteriors
+
+ggplot(posteriors, aes(x = dis)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Distance")
+ggplot(posteriors, aes(x = day)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Day of the week")
+ggplot(posteriors, aes(x = edu)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Education Level")
+ggplot(posteriors, aes(x = bmi)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Body Mass Index")
+
+ggplot(posteriors, aes(x = dis)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Distance") +
+  geom_vline(xintercept = mean(posteriors$dis), color = "green", size = 1) + geom_vline(xintercept = median(posteriors$dis), color = "red", size = 1) +
+  geom_vline(xintercept = map_estimate(posteriors$dis), color = "purple", size = 1)
+
+ggplot(posteriors, aes(x = day)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Day of the week") +
+  geom_vline(xintercept = mean(posteriors$day), color = "green", size = 1) + geom_vline(xintercept = median(posteriors$day), color = "red", size = 1) +
+  geom_vline(xintercept = map_estimate(posteriors$day), color = "purple", size = 1)
+
+ggplot(posteriors, aes(x = edu)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Education Level") +
+  geom_vline(xintercept = mean(posteriors$edu), color = "green", size = 1) + geom_vline(xintercept = median(posteriors$edu), color = "red", size = 1) +
+  geom_vline(xintercept = map_estimate(posteriors$edu), color = "purple", size = 1)
+
+ggplot(posteriors, aes(x = bmi)) + geom_density(fill = "orange") +  theme_bw() + xlab("Coefficient Estimate") + ylab("Density") + ggtitle("Body Mass Index") +
+  geom_vline(xintercept = mean(posteriors$bmi), color = "green", size = 1) + geom_vline(xintercept = median(posteriors$bmi), color = "red", size = 1) +
+  geom_vline(xintercept = map_estimate(posteriors$bmi), color = "purple", size = 1)
+```
+
+```{r}
+post <- as.data.frame(matrix(nrow = 3, ncol = 4))
+mean <- cbind(mean(posteriors$dis), mean(posteriors$day), mean(posteriors$edu), mean(posteriors$bmi))
+median <- cbind(median(posteriors$dis), median(posteriors$day), median(posteriors$edu), median(posteriors$bmi))
+map <- cbind(map_estimate(posteriors$dis), map_estimate(posteriors$day), map_estimate(posteriors$edu), map_estimate(posteriors$bmi))
+post[1, ] <- mean
+post[2, ] <- median
+post[3, ] <- map
+colnames(post) <- c("dis", "day", "edu", "bmi")
+rownames(post) <- c("Mean", "Median", "MAP")
+post <- as.data.frame(post)
+post
+
+range <- as.data.frame(matrix(nrow = 4, ncol = 1))
+range[1, ] <- t(range(posteriors$dis))
+range[2, ] <- t(range(posteriors$day))
+range[3, ] <- t(range(posteriors$edu))
+range[4, ] <- t(range(posteriors$bmi))
+colnames(range) <- c("Uncertainty")
+rownames(range) <- c("dis", "day", "edu", "bmi")
+range
+
+CI <- as.data.frame(matrix(nrow = 4, ncol = 3))
+CI[1, ] <- t(hdi(posteriors$dis, ci = 0.89))
+CI[2, ] <- t(hdi(posteriors$day, ci = 0.89))
+CI[3, ] <- t(hdi(posteriors$edu, ci = 0.89))
+CI[4, ] <- t(hdi(posteriors$bmi, ci = 0.89))
+colnames(CI) <- c("Credible Interval", "Low", "High")
+rownames(CI) <- c("dis", "day", "edu", "bmi")
+CI
+
+rope_range <- rope_range(bayMod)
+print("dis")
+rope(posteriors$dis, range = rope_range, ci = 0.89)
+print("day")
+rope(posteriors$day, range = rope_range, ci = 0.89)
+print("edu")
+rope(posteriors$edu, range = rope_range, ci = 0.89)
+print("bmi")
+rope(posteriors$bmi, range = rope_range, ci = 0.89)
+
+print("Probability of Direction: dis")
+n_positive <- posteriors %>% filter(dis > 0) %>% nrow()
+nDis <- (n_positive / nrow(posteriors)) * 100
+nDis 
+print("Probability of Direction: day")
+n_positive <- posteriors %>% filter(day > 0) %>% nrow()
+nDay <- (n_positive / nrow(posteriors)) * 100
+nDay
+print("Probability of Direction: edu")
+n_positive <- posteriors %>% filter(edu > 0) %>% nrow()
+nEdu <- (n_positive / nrow(posteriors)) * 100
+nEdu
+print("Probability of Direction: bmi")
+n_positive <- posteriors %>% filter(bmi > 0) %>% nrow()
+nBMI <- (n_positive / nrow(posteriors)) * 100
+nBMI
+
+print("Frequentist p-Value: dis")
+onesided_p_dis <- (1 - nDis) / 100
+twosided_p_dis <- onesided_p_dis * 2
+twosided_p_dis
+print("Frequentist p-Value: day")
+onesided_p_day <- (1 - nDay) / 100
+twosided_p_day <- onesided_p_day * 2
+twosided_p_day
+print("Frequentist p-Value: edu")
+onesided_p_edu <- (1 - nEdu) / 100
+twosided_p_edu <- onesided_p_edu * 2
+twosided_p_edu
+print("Frequentist p-Value: bmi")
+onesided_p_bmi <- (1 - nBMI) / 100
+twosided_p_bmi <- onesided_p_bmi * 2
+twosided_p_bmi
+```
+
+```{r}
+discribePosteriors <- describe_posterior(bayMod, test = c("p_direction", "rope", "bayesfactor"))
+discribePosteriors
+print_md(discribePosteriors, digits = 2)
+```
+
+
+
